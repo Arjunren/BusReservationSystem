@@ -1,0 +1,8 @@
+package com.arjunren.bus;
+import org.junit.jupiter.api.*;import java.time.*;import static org.junit.jupiter.api.Assertions.*;
+class BookingServiceTest{Database db;BookingService service;long user;@BeforeEach void setup()throws Exception{db=new Database("jdbc:h2:mem:"+System.nanoTime()+";DB_CLOSE_DELAY=-1");db.migrate();try(var c=db.connection()){c.createStatement().execute("INSERT INTO users(username,password_hash,role) VALUES('u','x','PASSENGER')");c.createStatement().execute("INSERT INTO buses(plate_number,name,capacity) VALUES('P','Bus',2)");c.createStatement().execute("INSERT INTO routes(origin,destination,base_fare) VALUES('A','B',10)");c.createStatement().execute("INSERT INTO trips(bus_id,route_id,departure_at) VALUES(1,1,DATEADD('DAY',1,CURRENT_TIMESTAMP))");try(var r=c.createStatement().executeQuery("SELECT id FROM users")){r.next();user=r.getLong(1);}}service=new BookingService(db);}
+@Test void reservesSeatAtServerFare(){var b=service.reserve(user,1,1);assertEquals("BOOKED",b.status());assertEquals("10.00",b.fare().setScale(2).toString());}
+@Test void preventsDuplicateSeat(){service.reserve(user,1,1);assertThrows(IllegalStateException.class,()->service.reserve(user,1,1));}
+@Test void rejectsSeatBeyondCapacity(){assertThrows(IllegalArgumentException.class,()->service.reserve(user,1,3));}
+@Test void ownerCanCancel(){var b=service.reserve(user,1,1);service.cancel(b.id(),user,false);try(var c=db.connection();var s=c.prepareStatement("SELECT status FROM bookings WHERE id=?")){s.setLong(1,b.id());try(var r=s.executeQuery()){r.next();assertEquals("CANCELLED",r.getString(1));}}catch(Exception e){fail(e);}}
+}
